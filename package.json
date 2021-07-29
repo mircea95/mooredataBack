@@ -1,0 +1,34 @@
+{
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "name": "xls-parser",
+  "version": "1.0.0",
+  "main": "server.js",
+  "author": "Andrei Pavalachi <andrei.pavalachi@hotmail.com>",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "bcrypt": "^5.0.1",
+    "nodemon": "^2.0.7",
+    "prettier": "^2.2.1"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.19.0",
+    "connect-busboy": "^0.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^9.0.0",
+    "ejs": "^3.1.6",
+    "express": "^4.17.1",
+    "express-fileupload": "^1.2.1",
+    "formidable": "^1.2.2",
+    "fs-extra": "^10.0.0",
+    "jsonwebtoken": "^8.5.1",
+    "morgan": "^1.10.0",
+    "node-xlsx": "^0.16.1",
+    "pg": "^8.6.0",
+    "url": "^0.11.0",
+    "uuid": "^8.3.2"
+  }
+}
