@@ -5,7 +5,7 @@ const XlsxParser = require('../xlsx/xlsxParser')
 
 exports.uploadFile = async (req, res) => {
     req.pipe(req.busboy);
-    req.setTimeout(1200000);
+    req.setTimeout(3600000);
     req.busboy.on('file', (fieldname, file, filename) => {
         if (!fs.existsSync(path.join(__dirname, '../uploads', filename))) {
             fs.createFileSync(path.join(__dirname, '../uploads', filename));
