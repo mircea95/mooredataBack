@@ -5,7 +5,7 @@ const XlsxParser = require('../xlsx/xlsxParser')
 
 exports.uploadFile = async (req, res) => {
     req.pipe(req.busboy);
-    req.setTimeout(600000);
+    req.setTimeout(1200000);
     req.busboy.on('file', (fieldname, file, filename) => {
         if (!fs.existsSync(path.join(__dirname, '../uploads', filename))) {
             fs.createFileSync(path.join(__dirname, '../uploads', filename));
@@ -15,13 +15,17 @@ exports.uploadFile = async (req, res) => {
         file.pipe(fstream);
 
         fstream.on('close', async () => {
+            let data = []
             console.log('File uploaded, started parsing the file', filename);
             let xlsx = new XlsxParser(req.user)
             let dataModel = await xlsx.generateDataModel(path.join(__dirname, '../uploads', filename))
-
-            let data = ['Fisierul a fost incarcat cu success']
-
-            data = await xlsx.verifyData(dataModel)
+            if (!dataModel){
+                data = ['Structura fisierului nu este corecta! Datele lipsesc! Verificati!']
+            } else {
+                data = ['Fisierul a fost incarcat cu success']
+                data = await xlsx.verifyData(dataModel)
+            }
+            
 
             res.send({
                 status: true,

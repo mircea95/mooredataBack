@@ -1,7 +1,7 @@
 // versiunea 1.3
 // Converteste excelul
 // Face verificareile separat
-// Daca succes atunci nu incarca in BD, doar salveaza intrun fisier denumirea documentului
+// Incarca in baza de date fara commit
 
 const xlsx = require('node-xlsx')
 const parse = require('csv-parser');
@@ -28,7 +28,7 @@ const {v4: uuid4} = require('uuid')
 			polite: {},
 			rbns: {},
 		}
-		clientFile = ''
+    
 	uuidIdPolite = {}
 	errorMessages = []
 	
@@ -46,7 +46,6 @@ const {v4: uuid4} = require('uuid')
 				} else {
 					response[data[0][j]].push(null)
 				}
-				data[i][j] = ''
 			}
 		}
 
@@ -85,12 +84,7 @@ const {v4: uuid4} = require('uuid')
     }
 
 	generateDataModel = async (fileName) => {
-		this.clientFile = fileName + "_" + this.user.id
-
-		fs.appendFile('companytry.txt', `${this.clientFile}\n`, function (err) {
-			if (err) throw err;
-			console.log('File companytry.txt Updated!');
-		});
+	
 
 		console.log("+- Convert Start!")
 		const convertCSV = await this.lsExample(fileName);
@@ -99,28 +93,18 @@ const {v4: uuid4} = require('uuid')
         let sheets = ['Polite', 'RBNS', 'Plati']
         for (let i = 0; i < 3; i++){
             const data = []
-			console.log(`+- Start load sheet ${i}`)
+			
             let dataRow = await this.processFile(convertCSV[i])
             console.log(`+- Sheet ${i} is ready`)
-            
-			if(!dataRow.length){
-				return null
-			}
-			
-			const columName = Object.keys(dataRow[0]);
-			
+            const columName = Object.keys(dataRow[0]);
+    
             data.push(columName)
-			
-			console.log("in for")
+    
             for (let j = 0; j < dataRow.length; j++){
-				
                 let values = Object.values(dataRow[j])
                 data.push(values)
-				dataRow[j] = ''
-				
             }
-			console.log("end for")
-			dataRow = ''
+			dataRow = []
             switch (sheets[i]) {
                 case 'Plati':
                     this.dataModel.plati =  this.generateData(data)
@@ -198,7 +182,83 @@ const {v4: uuid4} = require('uuid')
 			"CompanyName", 
 			'CompanyID')
 
-		
+		for (let i = 0; i < polite['idPolita'].length; i++) {
+
+			// verifica daca clasa risc este in nomenclator
+			const ClasaRisc = this.genValues(riskClassIdData, polite['ClasaRisc'][i])
+			if (!ClasaRisc){
+				messages.push(
+					`Tabela Polita: Nu sunt valide datele din cîmpul ClasaRisc - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca moneda este conform nomenclatorului
+			const moneda = this.genValues(curencyTypeIdData, polite['moneda'][i])
+			if (!moneda){
+				messages.push(
+					`Tabela Polita: Nu sunt valide datele din cîmpul moneda - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca moneda suma asig este conform nomenclatorului
+			const SaMoneda = this.genValues(curencyTypeIdData, polite['SaMoneda'][i])
+			if (!SaMoneda){
+				messages.push(
+					`Tabela Polita: Nu sunt valide datele din cîmpul SaMoneda - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca zona de deplasare este conform nomenclatorului
+			if(polite['zonaDeplasare'][i]){
+				const zonaDeplasare = this.genValues(insuranceZoneIdData, polite['zonaDeplasare'][i])
+				if (!zonaDeplasare){
+					messages.push(
+						`Tabela Polita: Nu sunt valide datele din cîmpul zonaDeplasare - rândul (${
+							i + 1
+					})`,
+				)}
+			}
+			// verifica daca viza local util este conform nomenclatorului
+			const vizaLocUtil = this.genValues(countryCodeIdData, polite['vizaLocUtil'][i].split('-')[0])
+			if (!vizaLocUtil){
+				messages.push(
+					`Tabela Polita: Nu sunt valide datele din cîmpul vizaLocUtil - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca Clasa Bonus Mallus este conform nomenclatorului
+			if (polite['BM'][i]) {
+				const BM = this.genValues(bmIdData, polite['BM'][i])
+				if (!BM){
+					messages.push(
+						`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
+							i + 1
+						})`,
+					)
+				}
+			} else if(!polite['BM'][i] && polite['ClasaRisc'][i].includes('RCA')) {
+				messages.push(
+					`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
+						i + 1
+					}) - (BM obligatoriu pentru RCA)`,
+				)
+			}
+
+			// verifica daca id companie este conform nomenclatorului
+			const companie = this.genValues(companyIdData, parseInt(polite['companie'][i]))
+			if (!companie){
+				messages.push(
+					`Tabela Polita: Nu sunt valide datele din cîmpul companie - rândul (${
+						i + 1
+					})`,
+				)
+			}
+
+		}
 
 		if ('idPolita' in polite) {
 			polite['idPolita'].forEach((element, index) => {
@@ -464,91 +524,7 @@ const {v4: uuid4} = require('uuid')
 				}
 			})
 		} else {
-			messages.push('Tabela Polita:  Lipseste coloana idPolite)')
-		}
-
-		for (let i = 0; i < polite['idPolita'].length; i++) {
-
-			// verifica daca clasa risc este in nomenclator
-			const ClasaRisc = this.genValues(riskClassIdData, polite['ClasaRisc'][i])
-			if (!ClasaRisc){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul ClasaRisc - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca moneda este conform nomenclatorului
-			const moneda = this.genValues(curencyTypeIdData, polite['moneda'][i])
-			if (!moneda){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul moneda - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca moneda suma asig este conform nomenclatorului
-			const SaMoneda = this.genValues(curencyTypeIdData, polite['SaMoneda'][i])
-			if (!SaMoneda){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul SaMoneda - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca zona de deplasare este conform nomenclatorului
-			if(polite['zonaDeplasare'][i]){
-				const zonaDeplasare = this.genValues(insuranceZoneIdData, polite['zonaDeplasare'][i])
-				if (!zonaDeplasare){
-					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul zonaDeplasare - rândul (${
-							i + 1
-					})`,
-				)}
-			}
-			// verifica daca viza local util este conform nomenclatorului
-			if (polite['vizaLocUtil'][i]){
-				const vizaLocUtil = this.genValues(countryCodeIdData, polite['vizaLocUtil'][i].split('-')[0])
-				if (!vizaLocUtil){
-					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul vizaLocUtil - rândul (${
-							i + 1
-						})`,
-					)
-				}
-			}
-			
-			// verifica daca Clasa Bonus Mallus este conform nomenclatorului
-			if (polite['BM'][i]) {
-				const BM = this.genValues(bmIdData, polite['BM'][i])
-				if (!BM){
-					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
-							i + 1
-						})`,
-					)
-				}
-			} else if(!polite['BM'][i] && polite['ClasaRisc'][i]) {
-				if (polite['ClasaRisc'][i].includes('RCA')){
-					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
-							i + 1
-						}) - (BM obligatoriu pentru RCA)`,
-					)
-				}
-				
-			} 
-
-			// verifica daca id companie este conform nomenclatorului
-			const companie = this.genValues(companyIdData, parseInt(polite['companie'][i]))
-			if (!companie){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul companie - rândul (${
-						i + 1
-					})`,
-				)
-			}
-
+			messages.push('Tabela Polita: Ati trecut limita maximă de rânduri. (maxim tabela trebuie să conțină 190000 rânduri)')
 		}
 
 		return messages
@@ -581,7 +557,57 @@ const {v4: uuid4} = require('uuid')
 			'CompanyID'
 		)
 
-		
+		for (let i = 0; i < rbns['idPolita'].length; i++) {
+
+			
+			// verifica daca moneda este conform nomenclatorului
+			const monedaDosar = this.genValues(curencyTypeIdData, rbns['moneda dosar'][i])
+			if (!monedaDosar){
+				this.errorMessages.push(
+					`Tabela RBNS: Nu sunt valide datele din cîmpul moneda dosar - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca tip dauna este conform nomenclatorului
+			const tipDauna = this.genValues(indemnityTypeIdData, rbns['tipDauna'][i])
+			if (!tipDauna){
+				this.errorMessages.push(
+					`Tabela RBNS: Nu sunt valide datele din cîmpul tipDauna - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca tipBeneficiar este conform nomenclatorului
+				const tipBeneficiar = this.genValues(bineficiarIdData, parseInt(rbns['tipBeneficiar'][i]))
+				if (!tipBeneficiar){
+					this.errorMessages.push(
+						`Tabela RBNS: Nu sunt valide datele din cîmpul tipBeneficiar - rândul (${
+							i + 1
+					})`,
+				)}
+			
+			// verifica daca taraEveniment este conform nomenclatorului
+			const taraEveniment = this.genValues(countryIdData, rbns['taraEveniment'][i])
+			if (!taraEveniment){
+				this.errorMessages.push(
+					`Tabela RBNS: Nu sunt valide datele din cîmpul taraEveniment - rândul (${
+						i + 1
+					})`,
+				)
+			}
+
+			// verifica daca id companie este conform nomenclatorului
+			const companie = this.genValues(companyIdData, parseInt(rbns['companie'][i]))
+			if (!companie){
+				this.errorMessages.push(
+					`Tabela RBNS: Nu sunt valide datele din cîmpul companie - rândul (${
+						i + 1
+					})`,
+				)
+			}
+
+		}
 
 
 		if ('idPolita' in rbns) {
@@ -737,61 +763,9 @@ const {v4: uuid4} = require('uuid')
 				}
 			})
 		} else {
-			this.errorMessages.push(`Tabela RBNS: Lipseste coloana idPolite)`)
+			this.errorMessages.push(`Tabela RBNS: Ati trecut limita maximă de rânduri. (maxim tabela trebuie să conțină 190000 rânduri)`)
 
 			return this.errorMessages
-		}
-
-		for (let i = 0; i < rbns['idPolita'].length; i++) {
-
-			
-			// verifica daca moneda este conform nomenclatorului
-			const monedaDosar = this.genValues(curencyTypeIdData, rbns['moneda dosar'][i])
-			if (!monedaDosar){
-				this.errorMessages.push(
-					`Tabela RBNS: Nu sunt valide datele din cîmpul moneda dosar - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca tip dauna este conform nomenclatorului
-			const tipDauna = this.genValues(indemnityTypeIdData, rbns['tipDauna'][i])
-			if (!tipDauna){
-				this.errorMessages.push(
-					`Tabela RBNS: Nu sunt valide datele din cîmpul tipDauna - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca tipBeneficiar este conform nomenclatorului
-				const tipBeneficiar = this.genValues(bineficiarIdData, parseInt(rbns['tipBeneficiar'][i]))
-				if (!tipBeneficiar){
-					this.errorMessages.push(
-						`Tabela RBNS: Nu sunt valide datele din cîmpul tipBeneficiar - rândul (${
-							i + 1
-					})`,
-				)}
-			
-			// verifica daca taraEveniment este conform nomenclatorului
-			const taraEveniment = this.genValues(countryIdData, rbns['taraEveniment'][i])
-			if (!taraEveniment){
-				this.errorMessages.push(
-					`Tabela RBNS: Nu sunt valide datele din cîmpul taraEveniment - rândul (${
-						i + 1
-					})`,
-				)
-			}
-
-			// verifica daca id companie este conform nomenclatorului
-			const companie = this.genValues(companyIdData, parseInt(rbns['companie'][i]))
-			if (!companie){
-				this.errorMessages.push(
-					`Tabela RBNS: Nu sunt valide datele din cîmpul companie - rândul (${
-						i + 1
-					})`,
-				)
-			}
-
 		}
 
 		return this.errorMessages
@@ -821,9 +795,58 @@ const {v4: uuid4} = require('uuid')
 		const companyIdData = await this.getDataFromDB(
 			"Company", 
 			"CompanyName", 
-			'CompanyID'
-		)
-		
+			'CompanyID')
+		for (let i = 0; i < plati['idPolita'].length; i++) {
+
+			// verifica daca moneda este conform nomenclatorului
+			const moneda = this.genValues(curencyIdData, plati['moneda'][i])
+			if (!moneda){
+				this.errorMessages.push(
+					`Tabela Plati: Nu sunt valide datele din cîmpul moneda - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca tip dauna este conform nomenclatorului
+			const tipDauna = this.genValues(indemnityTypeIdData, plati['tipDauna'][i])
+			if (!tipDauna){
+				this.errorMessages.push(
+					`Tabela Plati: Nu sunt valide datele din cîmpul tipDauna - rândul (${
+						i + 1
+					})`,
+				)
+			}
+			// verifica daca tipBeneficiar este conform nomenclatorului
+			const tipBeneficiar = this.genValues(bineficiarIdData, parseInt(plati['tipBeneficiar'][i]))
+			if (!tipBeneficiar){
+				this.errorMessages.push(
+					`Tabela Plati: Nu sunt valide datele din cîmpul tipBeneficiar - rândul (${
+						i + 1
+				})`,
+			)}
+			
+			// verifica daca taraEveniment este conform nomenclatorului
+			const taraEveniment = this.genValues(countryIdData, plati['taraEveniment'][i])
+			if (!taraEveniment){
+				this.errorMessages.push(
+					`Tabela Plati: Nu sunt valide datele din cîmpul taraEveniment - rândul (${
+						i + 1
+					})`,
+				)
+			}
+
+			// verifica daca id companie este conform nomenclatorului
+			const companie = this.genValues(companyIdData, parseInt(plati['companie'][i]))
+			if (!companie){
+				this.errorMessages.push(
+					`Tabela Plati: Nu sunt valide datele din cîmpul companie - rândul (${
+						i + 1
+					})`,
+				)
+			}
+
+		}
+
 
 		if ('idPolita' in plati) {
 			plati['idPolita'].forEach((element, index) => {
@@ -978,62 +1001,10 @@ const {v4: uuid4} = require('uuid')
 				}
 			})
 		} else {
-			this.errorMessages.push(`Tabela Plati:  Lipseste coloana idPolite)`)
+			this.errorMessages.push(`Tabela Plati: Ati trecut limita maximă de rânduri. (maxim tabela trebuie să conțină 190000 rânduri)`)
 
 			return this.errorMessages
 		}
-
-		for (let i = 0; i < plati['idPolita'].length; i++) {
-
-			// verifica daca moneda este conform nomenclatorului
-			const moneda = this.genValues(curencyIdData, plati['moneda'][i])
-			if (!moneda){
-				this.errorMessages.push(
-					`Tabela Plati: Nu sunt valide datele din cîmpul moneda - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca tip dauna este conform nomenclatorului
-			const tipDauna = this.genValues(indemnityTypeIdData, plati['tipDauna'][i])
-			if (!tipDauna){
-				this.errorMessages.push(
-					`Tabela Plati: Nu sunt valide datele din cîmpul tipDauna - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca tipBeneficiar este conform nomenclatorului
-			const tipBeneficiar = this.genValues(bineficiarIdData, parseInt(plati['tipBeneficiar'][i]))
-			if (!tipBeneficiar){
-				this.errorMessages.push(
-					`Tabela Plati: Nu sunt valide datele din cîmpul tipBeneficiar - rândul (${
-						i + 1
-				})`,
-			)}
-			
-			// verifica daca taraEveniment este conform nomenclatorului
-			const taraEveniment = this.genValues(countryIdData, plati['taraEveniment'][i])
-			if (!taraEveniment){
-				this.errorMessages.push(
-					`Tabela Plati: Nu sunt valide datele din cîmpul taraEveniment - rândul (${
-						i + 1
-					})`,
-				)
-			}
-
-			// verifica daca id companie este conform nomenclatorului
-			const companie = this.genValues(companyIdData, parseInt(plati['companie'][i]))
-			if (!companie){
-				this.errorMessages.push(
-					`Tabela Plati: Nu sunt valide datele din cîmpul companie - rândul (${
-						i + 1
-					})`,
-				)
-			}
-
-		}
-
 
 		return this.errorMessages
 	}
@@ -1071,9 +1042,9 @@ const {v4: uuid4} = require('uuid')
 
 	checkID = async(checkTab, politeTab, tabName, Messages) => {
 		
-		checkTab.forEach((element, index) => {
-			console.log(index)
-			let testCheck = politeTab.includes(element)
+		checkTab['idPolita'].forEach((element, index) => {
+			
+			let testCheck = politeTab['idPolita'].includes(element)
 			
 			if (testCheck === false) {
 				Messages.push(
@@ -1083,8 +1054,8 @@ const {v4: uuid4} = require('uuid')
 				)
 			}
 		})
-		checkTab = ''
-		politeTab = ''
+		checkTab = []
+		politeTab = []
 		return Messages
 	}
 
@@ -1145,7 +1116,7 @@ const {v4: uuid4} = require('uuid')
 				'CompanyID')
 			console.log("+- Nomenclators for Policy is ready")
 		
-			const columName = ["idPolita", "ClasaRisc", "Produs", "internalMTPLid", "din", "dout", "PBSM", "PBS", "PBA", "moneda", "zonaDeplasare", "vizaLocUtil", "tipVeh", "tipVeh2", "IDN", "nrAuto", "BM", "pfPJ", "varstaPF", "companie", "Salei", "SaMoneda", "CotaReasig", "LEILiderReasig", "Comision", "ChAdmin"]
+
 			for (let i = 0; i < polite['idPolita'].length; i++) {
 				policyId = await this.uuidCreate(polite['idPolita'][i])
 				
@@ -1260,9 +1231,7 @@ const {v4: uuid4} = require('uuid')
                 `
 				console.log(`Polite: ${i}`)		
 				await pool.query(query)
-				
-				columName.forEach(element => polite[element][i] = '');
-
+				query = null
 			}
 		} catch (e) {
 			this.errorMessages.push(`Tabela polite: ${e.message}`)
@@ -1307,7 +1276,6 @@ const {v4: uuid4} = require('uuid')
 				"CompanyName", 
 				'CompanyID')
 			console.log("+- Nomenclators for RBNS is ready")
-			const columName = ["idPolita", "idDosar", "ClasaRisc", "dataEveniment", "dataRaport", "miscareDataRaport", "moneda dosar", "tipDauna", "tipBeneficiar", "instanta", "taraEveniment", "companie", "DataRefuz", "CotaReasig", "LEILiderReasig", "ChAdmin"]
 			for (let i = 0; i < rbns['idPolita'].length; i++) {
 				policyID = await this.getUuid(
 					rbns['idPolita'][i]
@@ -1383,8 +1351,6 @@ const {v4: uuid4} = require('uuid')
                 `
 				console.log(`RBNS: ${i}`)	
 				await pool.query(query)	
-
-				columName.forEach(element => rbns[element][i] = '');
 			}
 		} catch (e) {
 			this.errorMessages.push('Tabela RBNS: ' + e.message)
@@ -1429,7 +1395,6 @@ const {v4: uuid4} = require('uuid')
 				"CompanyName", 
 				'CompanyID')
 			console.log("+- Nomenclators for PolicyIndemnity is ready")
-			const columName = ["idPolita", "idDosar", "ClasaRisc", "dataEveniment", "dataRaport", "miscareDataRaport", "moneda", "tipDauna", "tipBeneficiar", "instanta", "taraEveniment", "companie", "DataRefuz", "CotaReasig", "LEILiderReasig", "ChAdmin"]
 			for (let i = 0; i < insurance['idPolita'].length; i++) {
 				policyId = await this.getUuid(
 					insurance['idPolita'][i]
@@ -1503,8 +1468,6 @@ const {v4: uuid4} = require('uuid')
                 `
 				console.log(`Plati: ${i}`)
 				await pool.query(query)
-
-				columName.forEach(element => insurance[element][i] = '');
 			}
 		} catch (e) {
 			this.errorMessages.push('Tabela plati: ' + e.message)
@@ -1515,7 +1478,7 @@ const {v4: uuid4} = require('uuid')
 
 	saveData = async (data) => {
 		try {
-			await pool.query('BEGIN')
+			// await pool.query('BEGIN')
 			
 			await this.createInsurancePolicy(data['polite'])
 			await this.createInsurancePolicyRBNS(data['rbns'])
@@ -1534,9 +1497,9 @@ const {v4: uuid4} = require('uuid')
                 );`
 
 			await pool.query(query)
-			await pool.query('COMMIT')
+			// await pool.query('COMMIT')
 		} catch (e) {
-			await pool.query('ROLLBACK')
+			// await pool.query('ROLLBACK')
 
 			console.log(e)
 		}
@@ -1549,63 +1512,29 @@ const {v4: uuid4} = require('uuid')
 
 		const used = process.memoryUsage().heapUsed / 1024 / 1024;
 		console.log(`The script now uses approximately ${Math.round(used * 100) / 100} MB`);
-		console.log(this.errorMessages.length)
 
 		if (this.errorMessages.length) {
-			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
-				return this.errorMessages.slice(0, 1500)
-			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				return this.errorMessages
-			}
+			return this.errorMessages
 		}
 		//
 		console.log("+- Check RBNS ID")
-		this.errorMessages = await this.checkID(data.rbns['idPolita'], data.polite['idPolita'], 'RBNS', this.errorMessages)
+		this.errorMessages = await this.checkID(data.rbns, data.polite, 'RBNS', this.errorMessages)
 		if (this.errorMessages.length) {
-			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
-				return this.errorMessages.slice(0, 1500)
-			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				return this.errorMessages
-			}
+			return this.errorMessages
 		}
 		//
 		console.log("+- Check Plati ID")
-		this.errorMessages = await this.checkID(data.plati['idPolita'], data.polite['idPolita'], 'Plati', this.errorMessages)
+		this.errorMessages = await this.checkID(data.plati, data.polite, 'Plati', this.errorMessages)
 		if (this.errorMessages.length) {
-			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
-				return this.errorMessages.slice(0, 1500)
-			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				return this.errorMessages
-			}
+			return this.errorMessages
 		}
 		//
 		console.log("+- Now save data")
 		await this.saveData(data)
 
 		if (this.errorMessages.length) {
-			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
-				return this.errorMessages.slice(0, 1500)
-			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				return this.errorMessages
-			}
+			return this.errorMessages
 		}
-
-		fs.appendFile('companysucces.txt', `${this.clientFile}\n`, function (err) {
-			if (err) throw err;
-			console.log('File Updated!');
-		});
 
 		return ['Success']
 	}
