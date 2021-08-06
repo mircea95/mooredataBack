@@ -1,7 +1,6 @@
 // versiunea 1.3
 // Converteste excelul
 // Face verificareile separat
-// Daca succes atunci nu incarca in BD, doar salveaza intrun fisier denumirea documentului
 
 const xlsx = require('node-xlsx')
 const parse = require('csv-parser');
@@ -52,6 +51,7 @@ const {v4: uuid4} = require('uuid')
 
 		return response
 	}
+
 	lsExample = async (filename) => {
         // const filename = 'Pachet_Grawe_1.3All.xlsx'
         let newFile = filename.substring(0, filename.length - 5)
@@ -152,7 +152,6 @@ const {v4: uuid4} = require('uuid')
 		return converted_date;
 	}
 	
-
 	politaExists = async (politaName) => {
 		let query = `SELECT "PolicyId" FROM public."InsurancePolicy" WHERE "PolicyName" = '${politaName}'`
 
@@ -160,6 +159,7 @@ const {v4: uuid4} = require('uuid')
 
 		return !!response.rows.length
 	}
+
 	//functia care verifica daca valoarea exista in nomenclator
 	genValues = (nomenclator, value) =>{
 		let values = Object.keys(nomenclator).map(function(key){
@@ -464,93 +464,97 @@ const {v4: uuid4} = require('uuid')
 				}
 			})
 		} else {
-			messages.push('Tabela Polita:  Lipseste coloana idPolite)')
+			messages.push(`Tabela Polita:  Nu a fost identificata coloana idPolita. Verificați dacă denumirile coloanelor 
+			și structura documentului este conform ghidului!`)
+			return this.errorMessages
 		}
 
-		for (let i = 0; i < polite['idPolita'].length; i++) {
+		if ('idPolita' in polite){
+			for (let i = 0; i < polite['idPolita'].length; i++) {
 
-			// verifica daca clasa risc este in nomenclator
-			const ClasaRisc = this.genValues(riskClassIdData, polite['ClasaRisc'][i])
-			if (!ClasaRisc){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul ClasaRisc - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca moneda este conform nomenclatorului
-			const moneda = this.genValues(curencyTypeIdData, polite['moneda'][i])
-			if (!moneda){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul moneda - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca moneda suma asig este conform nomenclatorului
-			const SaMoneda = this.genValues(curencyTypeIdData, polite['SaMoneda'][i])
-			if (!SaMoneda){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul SaMoneda - rândul (${
-						i + 1
-					})`,
-				)
-			}
-			// verifica daca zona de deplasare este conform nomenclatorului
-			if(polite['zonaDeplasare'][i]){
-				const zonaDeplasare = this.genValues(insuranceZoneIdData, polite['zonaDeplasare'][i])
-				if (!zonaDeplasare){
+				// verifica daca clasa risc este in nomenclator
+				const ClasaRisc = this.genValues(riskClassIdData, polite['ClasaRisc'][i])
+				if (!ClasaRisc){
 					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul zonaDeplasare - rândul (${
-							i + 1
-					})`,
-				)}
-			}
-			// verifica daca viza local util este conform nomenclatorului
-			if (polite['vizaLocUtil'][i]){
-				const vizaLocUtil = this.genValues(countryCodeIdData, polite['vizaLocUtil'][i].split('-')[0])
-				if (!vizaLocUtil){
-					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul vizaLocUtil - rândul (${
+						`Tabela Polita: Nu sunt valide datele din cîmpul ClasaRisc - rândul (${
 							i + 1
 						})`,
 					)
 				}
-			}
-			
-			// verifica daca Clasa Bonus Mallus este conform nomenclatorului
-			if (polite['BM'][i]) {
-				const BM = this.genValues(bmIdData, polite['BM'][i])
-				if (!BM){
+				// verifica daca moneda este conform nomenclatorului
+				const moneda = this.genValues(curencyTypeIdData, polite['moneda'][i])
+				if (!moneda){
 					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
+						`Tabela Polita: Nu sunt valide datele din cîmpul moneda - rândul (${
 							i + 1
 						})`,
 					)
 				}
-			} else if(!polite['BM'][i] && polite['ClasaRisc'][i]) {
-				if (polite['ClasaRisc'][i].includes('RCA')){
+				// verifica daca moneda suma asig este conform nomenclatorului
+				const SaMoneda = this.genValues(curencyTypeIdData, polite['SaMoneda'][i])
+				if (!SaMoneda){
 					messages.push(
-						`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
+						`Tabela Polita: Nu sunt valide datele din cîmpul SaMoneda - rândul (${
 							i + 1
-						}) - (BM obligatoriu pentru RCA)`,
+						})`,
 					)
+				}
+				// verifica daca zona de deplasare este conform nomenclatorului
+				if(polite['zonaDeplasare'][i]){
+					const zonaDeplasare = this.genValues(insuranceZoneIdData, polite['zonaDeplasare'][i])
+					if (!zonaDeplasare){
+						messages.push(
+							`Tabela Polita: Nu sunt valide datele din cîmpul zonaDeplasare - rândul (${
+								i + 1
+						})`,
+					)}
+				}
+				// verifica daca viza local util este conform nomenclatorului
+				if (polite['vizaLocUtil'][i]){
+					const vizaLocUtil = this.genValues(countryCodeIdData, polite['vizaLocUtil'][i].split('-')[0])
+					if (!vizaLocUtil){
+						messages.push(
+							`Tabela Polita: Nu sunt valide datele din cîmpul vizaLocUtil - rândul (${
+								i + 1
+							})`,
+						)
+					}
 				}
 				
-			} 
-
-			// verifica daca id companie este conform nomenclatorului
-			const companie = this.genValues(companyIdData, parseInt(polite['companie'][i]))
-			if (!companie){
-				messages.push(
-					`Tabela Polita: Nu sunt valide datele din cîmpul companie - rândul (${
-						i + 1
-					})`,
-				)
+				// verifica daca Clasa Bonus Mallus este conform nomenclatorului
+				if (polite['BM'][i]) {
+					const BM = this.genValues(bmIdData, polite['BM'][i])
+					if (!BM){
+						messages.push(
+							`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
+								i + 1
+							})`,
+						)
+					}
+				} else if(!polite['BM'][i] && polite['ClasaRisc'][i]) {
+					if (polite['ClasaRisc'][i].includes('RCA')){
+						messages.push(
+							`Tabela Polita: Nu sunt valide datele din cîmpul BM - rândul (${
+								i + 1
+							}) - (BM obligatoriu pentru RCA)`,
+						)
+					}
+					
+				} 
+	
+				// verifica daca id companie este conform nomenclatorului
+				const companie = this.genValues(companyIdData, parseInt(polite['companie'][i]))
+				if (!companie){
+					messages.push(
+						`Tabela Polita: Nu sunt valide datele din cîmpul companie - rândul (${
+							i + 1
+						})`,
+					)
+				}
+	
 			}
-
-		}
-
+		} 
+		
 		return messages
 	}
 
@@ -737,8 +741,8 @@ const {v4: uuid4} = require('uuid')
 				}
 			})
 		} else {
-			this.errorMessages.push(`Tabela RBNS: Lipseste coloana idPolite)`)
-
+			this.errorMessages.push(`Tabela RBNS:  Nu a fost identificata coloana idPolita. Verificați dacă denumirile coloanelor 
+			și structura documentului este conform ghidului!`)
 			return this.errorMessages
 		}
 
@@ -978,8 +982,8 @@ const {v4: uuid4} = require('uuid')
 				}
 			})
 		} else {
-			this.errorMessages.push(`Tabela Plati:  Lipseste coloana idPolite)`)
-
+			this.errorMessages.push(`Tabela Plati:  Nu a fost identificata coloana idPolita. Verificați dacă denumirile coloanelor 
+			și structura documentului este conform ghidului!`)
 			return this.errorMessages
 		}
 
@@ -1037,7 +1041,8 @@ const {v4: uuid4} = require('uuid')
 
 		return this.errorMessages
 	}
-//Functii utilizate in procesul de verificare si adaugare in DB
+
+	//Functii utilizate in procesul de verificare si adaugare in DB
 	//Extrage toate datele adaugate in numenclatoarele din DB
 	getDataFromDB = async (tableName, columName, idname) => {
 			
@@ -1056,6 +1061,7 @@ const {v4: uuid4} = require('uuid')
 		
 		throw new Error(`${tableName}: Nu au fost identificate Nomenclatoare in DB. Contactati Administratorul!`);
 	}
+
 	//Verifica nomenclatoarele - coloanele din excel cu nomenclatoarele existente in BD
 	checkData = async (nomenc, value) => {
 		let values = Object.keys(nomenc).map(function(key){
@@ -1118,7 +1124,7 @@ const {v4: uuid4} = require('uuid')
 			let countryCodeId
 			let bmId
 			let companyId
-			console.log("+- Get nomenclators for Policy")
+			
 			const riskClassIdData = await this.getDataFromDB(
 				"InsurancePolicyRiskClass", 
 				"InsurancePolicyRiskName", 
@@ -1143,7 +1149,7 @@ const {v4: uuid4} = require('uuid')
 				"Company", 
 				"CompanyName", 
 				'CompanyID')
-			console.log("+- Nomenclators for Policy is ready")
+			
 		
 			const columName = ["idPolita", "ClasaRisc", "Produs", "internalMTPLid", "din", "dout", "PBSM", "PBS", "PBA", "moneda", "zonaDeplasare", "vizaLocUtil", "tipVeh", "tipVeh2", "IDN", "nrAuto", "BM", "pfPJ", "varstaPF", "companie", "Salei", "SaMoneda", "CotaReasig", "LEILiderReasig", "Comision", "ChAdmin"]
 			for (let i = 0; i < polite['idPolita'].length; i++) {
@@ -1542,15 +1548,32 @@ const {v4: uuid4} = require('uuid')
 		}
 	}
 
+	// showEror = (errors) => {
+	// 	if (errors > 1500){
+	// 		errors.splice(0, 0, `Au fost identificate ${errors.length} erori...`)
+	// 		errors.splice(1, 0, "Primile 1500 de erori:")
+	// 		return errors.slice(0, 1500)
+	// 	} else {
+	// 		errors.splice(0, 0, `Au fost identificate ${errors.length} erori...`)
+	// 		return errors
+	// 	}
+	// }
+
 	verifyData = async (data) => {
+		// Validare corectitudine date introdus
 		this.errorMessages = await this.validatePolite(data.polite, this.errorMessages)
 		await this.validateRbns(data.rbns)
 		await this.validatePlati(data.plati)
 
+		// Afisez in consola cite erori sau identificat dupa validarea corectitudinii datelor
+		console.log(`Validare Erors: ${this.errorMessages.length}`)
+
+		// Afiseaza in consolo cita memorie utilizeaza programul in acest moment de tip
 		const used = process.memoryUsage().heapUsed / 1024 / 1024;
 		console.log(`The script now uses approximately ${Math.round(used * 100) / 100} MB`);
-		console.log(this.errorMessages.length)
 
+		// Show Error
+		
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
 				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
@@ -1561,9 +1584,20 @@ const {v4: uuid4} = require('uuid')
 				return this.errorMessages
 			}
 		}
-		//
-		console.log("+- Check RBNS ID")
-		this.errorMessages = await this.checkID(data.rbns['idPolita'], data.polite['idPolita'], 'RBNS', this.errorMessages)
+		
+		//Verificam Id din RBNS
+		if(data.rbns['idPolita']){
+			console.log("+- Check RBNS ID")
+			this.errorMessages = await this.checkID(data.rbns['idPolita'], data.polite['idPolita'], 'RBNS', this.errorMessages)
+		} else {
+			console.log("Nu a fost identificata coloana idPolita in tabelul RBNS")
+			this.errorMessages.push("Lipseste coloana idPolita in tabelul RBNS sau a fost definită incorect (verificați ghidul)")
+		}
+
+		// Afisez in consola cite erori sau identificat dupa verificarea ID in RBNS
+		console.log(`ID-RBNS Erors: ${this.errorMessages.length}`)
+
+		// Show Error
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
 				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
@@ -1574,9 +1608,20 @@ const {v4: uuid4} = require('uuid')
 				return this.errorMessages
 			}
 		}
-		//
-		console.log("+- Check Plati ID")
-		this.errorMessages = await this.checkID(data.plati['idPolita'], data.polite['idPolita'], 'Plati', this.errorMessages)
+		
+		// Verificam ID din polite 
+		if(data.plati['idPolita']){
+			console.log("+- Check Plati ID")
+			this.errorMessages = await this.checkID(data.plati['idPolita'], data.polite['idPolita'], 'Plati', this.errorMessages)
+		} else {
+			console.log("Nu a fost identificata coloana idPolita in tabelul Plati")
+			this.errorMessages.push("Lipseste coloana idPolita in tabelul Plati sau a fost definită incorect (verificați ghidul)")
+		}
+
+		// Afisez in consola cite erori sau identificat dupa verificarea ID in Plati
+		console.log(`ID-Plati Erors: ${this.errorMessages.length}`)
+
+		// Show Error
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
 				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
@@ -1587,10 +1632,13 @@ const {v4: uuid4} = require('uuid')
 				return this.errorMessages
 			}
 		}
-		//
+		
+		// Se salveaza datele in BD
 		console.log("+- Now save data")
 		await this.saveData(data)
 
+		// Afisarea erorilor aici imi pare ca nu trebuie
+		// Show Error
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
 				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
