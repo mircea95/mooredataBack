@@ -1,7 +1,7 @@
 // versiunea 1.3
 // Converteste excelul
 // Face verificareile separat
-
+const crypto = require('crypto');
 const xlsx = require('node-xlsx')
 const parse = require('csv-parser');
 const fs = require('fs');
@@ -28,6 +28,7 @@ const {v4: uuid4} = require('uuid')
 			rbns: {},
 		}
 		clientFile = ''
+		fileHashValue = ''
 	uuidIdPolite = {}
 	errorMessages = []
 	
@@ -84,13 +85,43 @@ const {v4: uuid4} = require('uuid')
         return records
     }
 
+	getHash = async () => {
+		let query = `
+		SELECT "FileHash" FROM "${process.env.DB_NAME}".public."PackageLoaded"`
+		const response = await pool.query(query)
+		const allDataHash = []
+		for(let i = 0; i < response.rows.length; i++){
+			Object.keys(response.rows[i]).forEach((k) => response.rows[i][k] == null && delete response.rows[i][k]);
+			if(response.rows[i]['FileHash'] !== undefined){
+				allDataHash.push(response.rows[i]['FileHash'])
+			}
+		  }
+
+		return allDataHash
+		
+	}
+
 	generateDataModel = async (fileName) => {
+		// Inregistrare log in fisier cu denumirea fisierului si Id utilizator care incearca sa incarce
 		this.clientFile = fileName + "_" + this.user.id
 
 		fs.appendFile('companytry.txt', `${this.clientFile}\n`, function (err) {
 			if (err) throw err;
 			console.log('File companytry.txt Updated!');
 		});
+		// Sfirsit Inregistrare log in fisier
+
+		// Start Verificare Hash - Se genereaza hash pentru fisier si se verifica daca asa fisier a mai fost incarcat
+		const existingHash = await this.getHash()
+		
+		const hashSum = crypto.createHash('md5');
+		hashSum.update(fileName);
+		this.fileHashValue = hashSum.digest('hex');
+
+		if(existingHash.includes(this.fileHashValue)){
+			return "File_Exist"
+		}
+		// Sfirsit verificare Hash
 
 		console.log("+- Convert Start!")
 		const convertCSV = await this.lsExample(fileName);
@@ -108,18 +139,17 @@ const {v4: uuid4} = require('uuid')
 			}
 			
 			const columName = Object.keys(dataRow[0]);
+			const columNameTrim = columName.map(string => typeof string  === 'string' ? string.trim() : string)
+            data.push(columNameTrim)
 			
-            data.push(columName)
-			
-			console.log("in for")
             for (let j = 0; j < dataRow.length; j++){
 				
                 let values = Object.values(dataRow[j])
-                data.push(values)
+				const valuesTrim = values.map(string => typeof string  === 'string' ? string.trim() : string)
+                data.push(valuesTrim)
 				dataRow[j] = ''
 				
             }
-			console.log("end for")
 			dataRow = ''
             switch (sheets[i]) {
                 case 'Plati':
@@ -361,13 +391,14 @@ const {v4: uuid4} = require('uuid')
 							index + 1
 						}`,
 					)
-				} else if (!element.includes('-')) {
-					messages.push(
-						`Tabela Polita: Nu este valid tipul datelor in campul 'vizaLocUtil' randul ${
-							index + 1
-						}`,
-					)
 				}
+				// } else if (!element.includes('-')) {
+				// 	messages.push(
+				// 		`Tabela Polita: Nu este valid tipul datelor in campul 'vizaLocUtil' randul ${
+				// 			index + 1
+				// 		}`,
+				// 	)
+				// }
 			})
 
 			polite['tipVeh'].forEach((element, index) => {
@@ -585,9 +616,6 @@ const {v4: uuid4} = require('uuid')
 			'CompanyID'
 		)
 
-		
-
-
 		if ('idPolita' in rbns) {
 			rbns['idPolita'].forEach((element, index) => {
 				if (element === null) {
@@ -747,8 +775,6 @@ const {v4: uuid4} = require('uuid')
 		}
 
 		for (let i = 0; i < rbns['idPolita'].length; i++) {
-
-			
 			// verifica daca moneda este conform nomenclatorului
 			const monedaDosar = this.genValues(curencyTypeIdData, rbns['moneda dosar'][i])
 			if (!monedaDosar){
@@ -797,8 +823,8 @@ const {v4: uuid4} = require('uuid')
 			}
 
 		}
-
-		return this.errorMessages
+		// Aici daca facem return atunci se afiseaza doar RBNS
+		//return this.errorMessages
 	}
 
 	validatePlati = async (plati) => {
@@ -1112,7 +1138,7 @@ const {v4: uuid4} = require('uuid')
 	}
 
 	//Functia care adauga date in tabelul cu Polite
-	createInsurancePolicy = async (polite) => {
+	createInsurancePolicy = async (polite, packageID) => {
 		try {
 			let policyId
 			let riskClassId
@@ -1178,7 +1204,7 @@ const {v4: uuid4} = require('uuid')
 				insuranceZoneId = polite['zonaDeplasare'][i] ? "'" + await this.checkData(
 					insuranceZoneIdData,
 					polite['zonaDeplasare'][i],
-				) + "'" : null;
+				) + "'" : "'" + insuranceZoneIdData["99"] + "'";
 				
 				countryCodeId = await this.checkData(
 					countryCodeIdData,
@@ -1188,7 +1214,7 @@ const {v4: uuid4} = require('uuid')
 				if (polite['ClasaRisc'][i].includes('RCA') && polite['BM'][i]) {
 					bmId = "'" + await this.checkData(bmIdData, polite['BM'][i]) + "'"
 				} else if (!polite['ClasaRisc'][i].includes('RCA')) {
-					bmId = polite['BM'][i] ? "'" + await this.checkData(bmIdData, polite['BM'][i]) + "'": null;
+					bmId = polite['BM'][i] ? "'" + await this.checkData(bmIdData, polite['BM'][i]) + "'": "'" + bmIdData["8888"] + "'";
 				} else {
 					bmId = "'" + await this.checkData(bmIdData, polite['BM'][i]) + "'"
 				}
@@ -1229,7 +1255,8 @@ const {v4: uuid4} = require('uuid')
                         "PolicyParam2",
                         "InsurredObjectId",
                         "UserId",
-                        "CreationDateTimeRow"
+                        "CreationDateTimeRow",
+						"PackageID"
                     )
                     VALUES (
                         '${policyId}',
@@ -1261,7 +1288,8 @@ const {v4: uuid4} = require('uuid')
                         '${polite['tipVeh2'][i]}',
                         '${polite['nrAuto'][i]}',
                         '${this.user.id}',
-                        '${this.date}'
+                        '${this.date}',
+						'${packageID}'
                     );
                 `
 				console.log(`Polite: ${i}`)		
@@ -1277,7 +1305,7 @@ const {v4: uuid4} = require('uuid')
 		}
 	}
 	
-	createInsurancePolicyRBNS = async (rbns) => {
+	createInsurancePolicyRBNS = async (rbns, packageID) => {
 		try {
 			let policyID
 			let dataEveniment
@@ -1364,7 +1392,8 @@ const {v4: uuid4} = require('uuid')
                         "LEILiderReasig",
                         "AdministrativeExpenses",
                         "UserId",
-                        "CreationDateTimeRow"
+                        "CreationDateTimeRow",
+						"PackageID"
                     )
                     VALUES (
                         '${uuid4()}',
@@ -1384,7 +1413,8 @@ const {v4: uuid4} = require('uuid')
                         '${rbns['LEILiderReasig'][i]}',
                         '${rbns['ChAdmin'][i]}',
                         '${this.user.id}',
-                        '${this.date}'
+                        '${this.date}',
+						'${packageID}'
                     )
                 `
 				console.log(`RBNS: ${i}`)	
@@ -1399,7 +1429,7 @@ const {v4: uuid4} = require('uuid')
 		}
 	}
 
-	createInsurancePolicyIndemnity = async (insurance) => {
+	createInsurancePolicyIndemnity = async (insurance, packageID) => {
 		try {
 			let policyId
 			let dataEveniment
@@ -1484,7 +1514,8 @@ const {v4: uuid4} = require('uuid')
                         "LEILiderReasig",
                         "AdministrativeExpenses",
                         "UserId",
-                        "CreationDateTimeRow"
+                        "CreationDateTimeRow",
+						"PackageID"
                     )
                     VALUES (
                         '${uuid4()}',
@@ -1504,7 +1535,8 @@ const {v4: uuid4} = require('uuid')
                         '${insurance['LEILiderReasig'][i]}',
                         '${insurance['ChAdmin'][i]}',
                         '${this.user.id}',
-                        '${this.date}'
+                        '${this.date}',
+						'${packageID}'
                     )
                 `
 				console.log(`Plati: ${i}`)
@@ -1521,22 +1553,25 @@ const {v4: uuid4} = require('uuid')
 
 	saveData = async (data) => {
 		try {
+			const packageID = uuid4()
 			await pool.query('BEGIN')
-			
-			await this.createInsurancePolicy(data['polite'])
-			await this.createInsurancePolicyRBNS(data['rbns'])
-			await this.createInsurancePolicyIndemnity(data['plati'])
+		
+			await this.createInsurancePolicy(data['polite'], packageID)
+			await this.createInsurancePolicyRBNS(data['rbns'], packageID)
+			await this.createInsurancePolicyIndemnity(data['plati'], packageID)
+
 			console.log('Trecut')
 			let query = `
             INSERT INTO public."PackageLoaded"(
-                "Id", "UserId", "DateTime", "TotalPolicies", "TotalRbns", "TotalPayments")
+                "Id", "UserId", "DateTime", "TotalPolicies", "TotalRbns", "TotalPayments", "FileHash")
                 VALUES (
-                '${uuid4()}',
+                '${packageID}',
                 '${this.user.id}',
                 '${this.date}',
                 '${data['polite']['idPolita'].length}',
                 '${data['rbns']['idPolita'].length}',
-                '${data['plati']['idPolita'].length}'
+                '${data['plati']['idPolita'].length}',
+				'${this.fileHashValue}'
                 );`
 
 			await pool.query(query)
@@ -1576,11 +1611,11 @@ const {v4: uuid4} = require('uuid')
 		
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
+				this.errorMessages.splice(0, 0, `Verificare etapa 1 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(1, 0, "Primele 1500 de erori:")
 				return this.errorMessages.slice(0, 1500)
 			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(0, 0, `Verificare etapa 1 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
 				return this.errorMessages
 			}
 		}
@@ -1600,11 +1635,11 @@ const {v4: uuid4} = require('uuid')
 		// Show Error
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
+				this.errorMessages.splice(0, 0, `Verificare etapa 2 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(1, 0, "Primele 1500 de erori:")
 				return this.errorMessages.slice(0, 1500)
 			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(0, 0, `Verificare etapa 2 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
 				return this.errorMessages
 			}
 		}
@@ -1624,11 +1659,11 @@ const {v4: uuid4} = require('uuid')
 		// Show Error
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
+				this.errorMessages.splice(0, 0, `Verificare etapa 3 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(1, 0, "Primele 1500 de erori:")
 				return this.errorMessages.slice(0, 1500)
 			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(0, 0, `Verificare etapa 3 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
 				return this.errorMessages
 			}
 		}
@@ -1637,19 +1672,19 @@ const {v4: uuid4} = require('uuid')
 		console.log("+- Now save data")
 		await this.saveData(data)
 
-		// Afisarea erorilor aici imi pare ca nu trebuie
 		// Show Error
 		if (this.errorMessages.length) {
 			if (this.errorMessages.length > 1500){
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
-				this.errorMessages.splice(1, 0, "Primile 1500 de erori:")
+				this.errorMessages.splice(0, 0, `Verificare etapa 3 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(1, 0, "Primele 1500 de erori:")
 				return this.errorMessages.slice(0, 1500)
 			} else {
-				this.errorMessages.splice(0, 0, `Au fost identificate ${this.errorMessages.length} erori...`)
+				this.errorMessages.splice(0, 0, `Verificare etapa 3 din 3: Au fost identificate ${this.errorMessages.length} erori...`)
 				return this.errorMessages
 			}
 		}
 
+		// Salvam loguri ca packetul a fost incarcat
 		fs.appendFile('companysucces.txt', `${this.clientFile}\n`, function (err) {
 			if (err) throw err;
 			console.log('File Updated!');

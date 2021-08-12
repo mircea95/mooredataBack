@@ -149,13 +149,18 @@ User.changePass = async (id, newPassword) => {
 }
 
 User.stats = async (id) => {
-    let query = `
-        SELECT "Id", "UserId", "DateTime", "TotalPolicies", "TotalRbns", "TotalPayments"
-	        FROM public."PackageLoaded"
-	    WHERE "UserId" = '${id}';
-    `
-
+    
+    let query = `SELECT "CompanyId" FROM public."User"
+        INNER JOIN "Company" ON "Company"."CompanyID"="User"."CompanyId" WHERE "Id"='${id}'`
+    
     let response = await pool.query(query)
+
+    query = `SELECT "PackageLoaded"."Id", CONCAT("FirstName",' ',"LastName"), "DateTime", "TotalPolicies", "TotalRbns", "TotalPayments"
+	        FROM public."PackageLoaded"
+			INNER JOIN "User" ON "User"."Id"="PackageLoaded"."UserId"
+		WHERE "CompanyId"='${response.rows[0].CompanyId}'`
+
+    response = await pool.query(query)
 
     if (!response) {
         return undefined
