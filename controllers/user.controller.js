@@ -12,10 +12,10 @@ exports.login = async (req, res) => {
             })
         }
 
-        const user = await User.login(req.body.username)
+        const user = await User.login(req.body.username.trim())
 
         if (user) {
-            const validPass = await bcrypt.compare(req.body.password, user.password)
+            const validPass = await bcrypt.compare(req.body.password.trim(), user.password)
             // const validPass = req.body.password === user.password
 
             if (!validPass) {

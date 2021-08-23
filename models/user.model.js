@@ -155,7 +155,7 @@ User.stats = async (id) => {
     
     let response = await pool.query(query)
 
-    query = `SELECT "PackageLoaded"."Id", CONCAT("FirstName",' ',"LastName"), "DateTime", "TotalPolicies", "TotalRbns", "TotalPayments"
+    query = `SELECT "PackageLoaded"."Id", CONCAT("FirstName",' ',"LastName"), "DateTime", "TotalPolicies", "TotalRbns", "TotalPayments", "FileName"
 	        FROM public."PackageLoaded"
 			INNER JOIN "User" ON "User"."Id"="PackageLoaded"."UserId"
 		WHERE "CompanyId"='${response.rows[0].CompanyId}'`
@@ -165,7 +165,7 @@ User.stats = async (id) => {
     if (!response) {
         return undefined
     }
-
+  
     return response.rows
 }
 

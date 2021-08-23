@@ -20,7 +20,11 @@ exports.uploadFile = async (req, res) => {
             let xlsx = new XlsxParser(req.user)
             let dataModel = await xlsx.generateDataModel(path.join(__dirname, '../uploads', filename))
             if (!dataModel){
-                data = ['Structura fisierului nu este corecta! Datele din tabele lipsesc!']
+                data = [`
+                    Structura fisierului nu este corecta! Excelul trebuie să conțină 3 tabele/sheet-uri,
+                    ordonate corespunzător după cum urmează: Polite, RBNS, Plati. Tabelele RBNS si Plati
+                    pot să fie fără date în caz că ele nu există!
+                `]
             } else if (dataModel === "File_Exist"){
                 data = ['Fișierul dat deja a fost încărcat cu succes! Pentru corectări, contactați Administratorii.']
             } else {
