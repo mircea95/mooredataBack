@@ -1492,8 +1492,8 @@ const {v4: uuid4} = require('uuid')
                     VALUES (
                         '${uuid4()}',
                         '${policyID}',
-                        '${rbns['dataEveniment'][i]}',
-                        '${rbns['dataRaport'][i]}',
+                        '${dataEveniment}',
+                        '${dataRaport}',
                         '${curencyTypeId}',
                         '${rbns['idDosar'][i]}',
                         '${indemnityTypeId}',
